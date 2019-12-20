@@ -1,0 +1,37 @@
+from pyspark.sql import SparkSession
+import s3fs
+import boto3
+import pandas as pd
+from io import StringIO,BytesIO
+from fastparquet import write
+import fastparquet
+import pyarrow.parquet as pq
+import pyarrow
+import numpy as np
+
+# initialise sparkContext
+
+spark = SparkSession.builder \
+        .master('local') \
+        .appName('myAppName') \
+        .config('spark.executor.memory', '5gb') \
+        .config("spark.cores.max", "6") \
+        .getOrCreate()
+sc = spark.sparkContext
+s3 = s3fs.S3FileSystem()
+API1_path = "s3://gluecoredata/part-00000-761b0075-12b1-469e-8248-6e4507fbdb43-c000.snappy.parquet"
+DMS_path = "s3://gluecoredata/part-00000-ecced13b-6941-4668-9601-c234cbbfdaa9-c000.snappy.parquet"
+API1df = pq.ParquetDataset(API1_path, filesystem=s3).read_pandas().to_pandas()
+DMSdf = pq.ParquetDataset(DMS_path, filesystem=s3).read_pandas().to_pandas()
+DMSdf["full_name"] =  DMSdf.first_name + " " + DMSdf.last_name
+API1df["Hard_code"] = API1df.full_name1.isin(DMSdf.full_name)
+final_path = 's3://ff-emr-s3-curated/Wealth.parquet.gzip'
+API1df  = API1df.astype(str)
+final = API1df.to_parquet(final_path,compression='gzip')
+pandas_df = pq.ParquetDataset('s3://gluecoredata/part-00000-d5adbb98-b78a-4005-897e-9145473159d6-c000.snappy.parquet', filesystem=s3).read_pandas().to_pandas()
+final_pt = 's3://ff-emr-s3-curated/plaid.parquet.gzip'
+API1df1  = pandas_df.astype(str)
+fin = API1df1.to_parquet(final_pt,compression='gzip')
+final_dir = 's3://ff-emr-s3-curated/user_details.parquet.gzip'
+finl = DMSdf.to_parquet(final_dir,compression='gzip')
+
